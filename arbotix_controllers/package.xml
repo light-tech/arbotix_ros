@@ -1,4 +1,4 @@
-<package>
+<package format="3">
   <name>arbotix_controllers</name>
   <version>0.11.0</version>
   <description>
@@ -9,9 +9,9 @@
   <license>BSD</license>
   <url>http://ros.org/wiki/arbotix_controllers</url>
   
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <run_depend>arbotix_python</run_depend>
-  <run_depend>trajectory_msgs</run_depend>
-  <run_depend>tf</run_depend>
+  <exec_depend>arbotix_python</exec_depend>
+  <exec_depend>trajectory_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
 </package>

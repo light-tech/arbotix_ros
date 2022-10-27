@@ -1,4 +1,4 @@
-<package>
+<package format="3">
   <name>arbotix_sensors</name>
   <version>0.11.0</version>
   <description>
@@ -9,7 +9,7 @@
   <license>BSD</license>
   <url>http://ros.org/wiki/arbotix_sensors</url>
   
-  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
   <run_depend>arbotix_python</run_depend>
 </package>
