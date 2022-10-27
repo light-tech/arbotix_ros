@@ -196,7 +196,10 @@ class ArbotixROS(ArbotiX):
                 iter += 1
 
 
-if __name__ == "__main__":
+def main(args=None):
     rospy.init_node('arbotix')
     a = ArbotixROS()
+
+if __name__ == "__main__":
+    main()
 

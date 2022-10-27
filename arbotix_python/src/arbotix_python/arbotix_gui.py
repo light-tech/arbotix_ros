@@ -197,10 +197,12 @@ class controllerGUI(wx.Frame):
             t.angular.x = 0; t.angular.y = 0; t.angular.z = self.turn/50.0
         self.cmd_vel.publish(t)
 
-if __name__ == '__main__':
+def main(args=None):
     # initialize GUI
     rospy.init_node('controllerGUI')
     app = wx.PySimpleApp()
     frame = controllerGUI(None, True)
     app.MainLoop()
 
+if __name__ == '__main__':
+    main()

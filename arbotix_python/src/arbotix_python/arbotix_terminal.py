@@ -174,7 +174,7 @@ class Terminal(ArbotiX):
             return 1    # default to 1Mbps
 
 
-if __name__ == "__main__":
+def main(args=[]):
     try:
         if len(sys.argv) > 2:
             t = Terminal(sys.argv[1], int(sys.argv[2]))
@@ -185,4 +185,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nExiting...")
 
-
+if __name__ == "__main__":
+    main(sys.argv)
