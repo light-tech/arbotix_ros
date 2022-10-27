@@ -1,5 +1,5 @@
 # Reading or command to a single digital IO pin.
-Header header
+std_msgs/Header header
 
 # value of pin
 uint8 LOW=0
