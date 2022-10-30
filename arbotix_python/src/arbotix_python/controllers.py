@@ -28,6 +28,8 @@
 
 ## @file controllers.py Base class and support functions for a controllers.
 
+from array import array
+
 ## @brief Controllers interact with ArbotiX hardware.
 class Controller:
 
@@ -43,9 +45,9 @@ class Controller:
         self.pause = False
 
         # output for joint states publisher
-        self.joint_names = list()
-        self.joint_positions = list()
-        self.joint_velocities = list()
+        self.joint_names = array('d') #list()
+        self.joint_positions = array('d') #list()
+        self.joint_velocities = array('d') #list()
 
     ## @brief Start the controller, do any hardware setup needed.
     def startup(self):

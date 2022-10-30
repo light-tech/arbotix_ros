@@ -27,7 +27,8 @@
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import rospy
+import rclpy
+from rclpy.duration import Duration
 
 from math import radians
 
@@ -40,27 +41,27 @@ from arbotix_python.joints import *
 
 class DynamixelServo(Joint):
 
-    def __init__(self, device, name, ns="~joints"):
+    def __init__(self, device, name, ns="joints"):
         Joint.__init__(self, device, name)
-        n = ns+"/"+name+"/"
+        n = ns+"."+name+"."
         
-        self.id = int(rospy.get_param(n+"id"))
-        self.ticks = rospy.get_param(n+"ticks", 1024)
-        self.neutral = rospy.get_param(n+"neutral", self.ticks/2)
+        self.id = device.declare_parameter(n+"id", -1).get_parameter_value().integer_value
+        self.ticks = device.declare_parameter(n+"ticks", 1024).get_parameter_value().integer_value
+        self.neutral = device.declare_parameter(n+"neutral", self.ticks/2).get_parameter_value().double_value
         if self.ticks == 4096:
             self.range = 360.0
         else:
             self.range = 300.0
-        self.range = rospy.get_param(n+"range", self.range)
+        self.range = device.declare_parameter(n+"range", self.range).get_parameter_value().double_value
         self.rad_per_tick = radians(self.range)/self.ticks
 
         # TODO: load these from URDF
-        self.max_angle = radians(rospy.get_param(n+"max_angle",self.range/2.0))
-        self.min_angle = radians(rospy.get_param(n+"min_angle",-self.range/2.0))
-        self.max_speed = radians(rospy.get_param(n+"max_speed",684.0)) 
+        self.max_angle = radians(device.declare_parameter(n+"max_angle",self.range/2.0).get_parameter_value().integer_value)
+        self.min_angle = radians(device.declare_parameter(n+"min_angle",-self.range/2.0).get_parameter_value().integer_value)
+        self.max_speed = radians(device.declare_parameter(n+"max_speed",684.0).get_parameter_value().integer_value)
                                                 # max speed = 114 rpm - 684 deg/s
-        self.invert = rospy.get_param(n+"invert",False)
-        self.readable = rospy.get_param(n+"readable",True)
+        self.invert = device.declare_parameter(n+"invert",False).get_parameter_value().bool_value
+        self.readable = device.declare_parameter(n+"readable",True).get_parameter_value().bool_value
 
         self.status = "OK"
         self.level = DiagnosticStatus.OK
@@ -72,7 +73,7 @@ class DynamixelServo(Joint):
         self.velocity = 0.0                     # moving speed
         self.enabled = True                     # can we take commands?
         self.active = False                     # are we under torque control?
-        self.last = rospy.Time.now()
+        self.last = device.get_clock().now()
 
         self.reads = 0.0                        # number of reads
         self.errors = 0                         # number of failed reads
@@ -83,10 +84,10 @@ class DynamixelServo(Joint):
         self.temperature = 0.0
         
         # ROS interfaces
-        rospy.Subscriber(name+'/command', Float64, self.commandCb)
-        rospy.Service(name+'/relax', Relax, self.relaxCb)
-        rospy.Service(name+'/enable', Enable, self.enableCb)
-        rospy.Service(name+'/set_speed', SetSpeed, self.setSpeedCb)
+        device.create_subscription(Float64, name+'/command', self.commandCb, 10)
+        device.create_service(Relax, name+'/relax', self.relaxCb)
+        device.create_service(Enable, name+'/enable', self.enableCb)
+        device.create_service(SetSpeed, name+'/set_speed', self.setSpeedCb)
 
     def interpolate(self, frame):
         """ Get the new position to move to, in ticks. """
@@ -108,7 +109,7 @@ class DynamixelServo(Joint):
             if self.device.fake:
                 last_angle = self.position
                 self.position = self.last_cmd
-                t = rospy.Time.now()
+                t = device.get_clock().now()
                 self.velocity = (self.position - last_angle)/((t - self.last).to_nsec()/1000000000.0)
                 self.last = t
                 return None
@@ -117,7 +118,7 @@ class DynamixelServo(Joint):
             # when fake, need to reset velocity to 0 here.
             if self.device.fake:
                 self.velocity = 0.0
-                self.last = rospy.Time.now()
+                self.last = device.get_clock().now()
             return None
 
     def setCurrentFeedback(self, reading):
@@ -129,7 +130,7 @@ class DynamixelServo(Joint):
             last_angle = self.position
             self.position = self.ticksToAngle(reading)
             # update velocity estimate
-            t = rospy.Time.now()
+            t = device.get_clock().now()
             self.velocity = (self.position - last_angle)/((t - self.last).to_nsec()/1000000000.0)
             self.last = t
         else:
@@ -166,21 +167,21 @@ class DynamixelServo(Joint):
             self.level = DiagnosticStatus.OK
         msg.level = self.level
         msg.message = self.status
-        msg.values.append(KeyValue("Position", str(self.position)))
-        msg.values.append(KeyValue("Temperature", str(self.temperature)))
-        msg.values.append(KeyValue("Voltage", str(self.voltage)))
+        msg.values.append(KeyValue(key="Position", value=str(self.position)))
+        msg.values.append(KeyValue(key="Temperature", value=str(self.temperature)))
+        msg.values.append(KeyValue(key="Voltage", value=str(self.voltage)))
         if self.reads + self.errors > 100:
             self.total_errors.append((self.errors*100.0)/(self.reads+self.errors))
             if len(self.total_errors) > 10:
                 self.total_errors = self.total_errors[-10:]
             self.reads = 0
             self.errors = 0
-        msg.values.append(KeyValue("Reads", str(self.total_reads)))
-        msg.values.append(KeyValue("Error Rate", str(sum(self.total_errors)/len(self.total_errors))+"%" ))
+        msg.values.append(KeyValue(key="Reads", value=str(self.total_reads)))
+        msg.values.append(KeyValue(key="Error Rate", value=str(sum(self.total_errors)/len(self.total_errors))+"%" ))
         if self.active:
-            msg.values.append(KeyValue("Torque", "ON"))
+            msg.values.append(KeyValue(key="Torque", value="ON"))
         else:
-            msg.values.append(KeyValue("Torque", "OFF"))
+            msg.values.append(KeyValue(key="Torque", value="OFF"))
         return msg
 
     def angleToTicks(self, angle):
@@ -232,15 +233,19 @@ class DynamixelServo(Joint):
 
     def commandCb(self, req):
         """ Float64 style command input. """
+        self.device.get_logger().info("Joint " + self.name + " received command " + str(req.data))
         if self.enabled:
             if self.controller and self.controller.active():
                 # Under and action control, do not interfere
+                self.device.get_logger().info("Joint " + self.name + " under action control.")
                 return
             elif self.desired != req.data or not self.active:
                 self.dirty = True
                 self.active = True
                 self.desired = req.data
-                
+        else:
+            self.device.get_logger().info("Joint " + self.name + " is disabled.")
+
     def setSpeedCb(self, req):
         """ Set servo speed. Requested speed is in radians per second.
             Don't allow 0 which means "max speed" to a Dynamixel in joint mode. """
@@ -368,18 +373,20 @@ class ServoController(Controller):
             elif isinstance(joint, HobbyServo):
                 self.hobbyservos.append(joint)
 
-        self.w_delta = rospy.Duration(1.0/rospy.get_param("~write_rate", 10.0))
-        self.w_next = rospy.Time.now() + self.w_delta
+        self.w_delta = Duration(seconds=1.0/device.declare_parameter("write_rate", 10.0).get_parameter_value().double_value)
+        self.w_next = device.get_clock().now() + self.w_delta
 
-        self.r_delta = rospy.Duration(1.0/rospy.get_param("~read_rate", 10.0))
-        self.r_next = rospy.Time.now() + self.r_delta
+        # Can't re-declare parameter here as it is already declared in publishers
+        # TODO Declare all parameters once in the node subclass when possible
+        self.r_delta = Duration(seconds=1.0/device.get_parameter("read_rate").get_parameter_value().double_value)
+        self.r_next = device.get_clock().now() + self.r_delta
 
-        rospy.Service(name + '/relax_all', Relax, self.relaxCb)
-        rospy.Service(name + '/enable_all', Enable, self.enableCb)
+        device.create_service(Relax, name + '/relax_all', self.relaxCb)
+        device.create_service(Enable, name + '/enable_all', self.enableCb)
 
     def update(self):
         """ Read servo positions, update them. """
-        if rospy.Time.now() > self.r_next and not self.fake:
+        if self.device.get_clock().now() > self.r_next and not self.fake:
             if self.device.use_sync_read:
                 # arbotix/servostik/wifi board sync_read
                 synclist = list()
@@ -400,27 +407,27 @@ class ServoController(Controller):
                 # direct connection, or other hardware with no sync_read capability
                 for joint in self.dynamixels:
                     joint.setCurrentFeedback(self.device.getPosition(joint.id))
-            self.r_next = rospy.Time.now() + self.r_delta
+            self.r_next = self.device.get_clock().now() + self.r_delta
 
-        if rospy.Time.now() > self.w_next:
+        if self.device.get_clock().now() > self.w_next:
             if self.device.use_sync_write and not self.fake:
                 syncpkt = list()
                 for joint in self.dynamixels:
-                    v = joint.interpolate(1.0/self.w_delta.to_sec())
+                    v = joint.interpolate(1000000000.0/self.w_delta.nanoseconds)
                     if v != None:   # if was dirty
-                        syncpkt.append([joint.id,int(v)%256,int(v)>>8])                         
+                        syncpkt.append([joint.id,int(v)%256,int(v)>>8])
                 if len(syncpkt) > 0:      
                     self.device.syncWrite(P_GOAL_POSITION_L,syncpkt)
             else:
                 for joint in self.dynamixels:
-                    v = joint.interpolate(1.0/self.w_delta.to_sec())
+                    v = joint.interpolate(1000000000.0/self.w_delta.nanoseconds)
                     if v != None:   # if was dirty      
                         self.device.setPosition(joint.id, int(v))
             for joint in self.hobbyservos: 
-                v = joint.interpolate(1.0/self.w_delta.to_sec())
+                v = joint.interpolate(1000000000.0/self.w_delta.nanoseconds)
                 if v != None:   # if it was dirty   
                     self.device.setServo(joint.id, v)
-            self.w_next = rospy.Time.now() + self.w_delta
+            self.w_next = self.device.get_clock().now() + self.w_delta
 
     def getDiagnostics(self):
         """ Update status of servos (voltages, temperatures). """

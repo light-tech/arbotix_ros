@@ -27,25 +27,29 @@
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import rospy
+import rclpy
+from rclpy.duration import Duration
+
 from diagnostic_msgs.msg import DiagnosticArray
 from sensor_msgs.msg import JointState
 
 class DiagnosticsPublisher:
     """ Class to handle publications of joint_states message. """
 
-    def __init__(self):
-        self.t_delta = rospy.Duration(1.0/rospy.get_param("~diagnostic_rate", 1.0))
-        self.t_next = rospy.Time.now() + self.t_delta
-        self.pub = rospy.Publisher('diagnostics', DiagnosticArray, queue_size=5)
+    def __init__(self, node):
+        self.node = node
+        rate = node.declare_parameter("diagnostic_rate", 1.0).get_parameter_value().double_value
+        self.t_delta = Duration(seconds=1.0/rate)
+        self.t_next = node.get_clock().now() + self.t_delta
+        self.pub = node.create_publisher(DiagnosticArray, 'diagnostics', 5)
 
     def update(self, joints, controllers):
         """ Publish diagnostics. """    
-        now = rospy.Time.now()
+        now = self.node.get_clock().now()
         if now > self.t_next:
             # create message
             msg = DiagnosticArray()
-            msg.header.stamp = now
+            msg.header.stamp = now.to_msg()
             for controller in controllers:
                 d = controller.getDiagnostics()
                 if d:
@@ -62,23 +66,24 @@ class DiagnosticsPublisher:
 class JointStatePublisher:
     """ Class to handle publications of joint_states message. """
 
-    def __init__(self):
+    def __init__(self, node):
         # parameters: throttle rate and geometry
-        self.rate = rospy.get_param("~read_rate", 10.0)
-        self.t_delta = rospy.Duration(1.0/self.rate)
-        self.t_next = rospy.Time.now() + self.t_delta
+        self.node = node
+        self.rate = node.declare_parameter("read_rate", 10.0).get_parameter_value().double_value
+        self.t_delta = Duration(seconds=1.0/self.rate)
+        self.t_next = node.get_clock().now() + self.t_delta
 
         # subscriber
-        self.pub = rospy.Publisher('joint_states', JointState, queue_size=5)
+        self.pub = node.create_publisher(JointState, 'joint_states', 5)
 
     def update(self, joints, controllers):
         """ publish joint states. """
-        if rospy.Time.now() > self.t_next:   
+        if self.node.get_clock().now() > self.t_next:
             msg = JointState()
-            msg.header.stamp = rospy.Time.now()
-            msg.name = list()
-            msg.position = list()
-            msg.velocity = list()
+            msg.header.stamp = self.node.get_clock().now().to_msg()
+            msg.name = [] #list()
+            msg.position = [] #list()
+            msg.velocity = [] #list()
             for joint in joints:
                 msg.name.append(joint.name)
                 msg.position.append(joint.position)
@@ -88,5 +93,5 @@ class JointStatePublisher:
                 msg.position += controller.joint_positions
                 msg.velocity += controller.joint_velocities
             self.pub.publish(msg)
-            self.t_next = rospy.Time.now() + self.t_delta
+            self.t_next = self.node.get_clock().now() + self.t_delta
 

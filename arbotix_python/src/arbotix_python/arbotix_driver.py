@@ -27,60 +27,68 @@
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import rospy
-import sys
+import threading
+
+import rclpy
+from rclpy.node import Node
 
 from arbotix_msgs.msg import *
 from arbotix_msgs.srv import *
 
 from arbotix_python.arbotix import ArbotiX, ArbotiXException
-from arbotix_python.diff_controller import DiffController
-from arbotix_python.follow_controller import FollowController
+#from arbotix_python.diff_controller import DiffController      # TODO Uncomment once ported
+#from arbotix_python.follow_controller import FollowController  # TODO Uncomment once ported
 from arbotix_python.servo_controller import *
-from arbotix_python.linear_controller import *
+#from arbotix_python.linear_controller import *                 # TODO Uncomment once ported
 from arbotix_python.publishers import *
-from arbotix_python.io import *
+#from arbotix_python.io import *                                # TODO Uncomment once ported
 
 # name: [ControllerClass, pause]
-controller_types = { "follow_controller" : FollowController,
-                     "diff_controller"   : DiffController,
+#controller_types = { "follow_controller" : FollowController,
+#                     "diff_controller"   : DiffController,
 #                    "omni_controller"   : OmniController,
-                     "linear_controller" : LinearControllerAbsolute,
-                     "linear_controller_i" : LinearControllerIncremental }
+#                     "linear_controller" : LinearControllerAbsolute,
+#                     "linear_controller_i" : LinearControllerIncremental }
 
 ###############################################################################
 # Main ROS interface
-class ArbotixROS(ArbotiX):
+class ArbotixROS(ArbotiX, Node):
     
     def __init__(self):
+        Node.__init__(self, "arbotix")
+
         pause = False
 
         # load configurations    
-        port = rospy.get_param("~port", "/dev/ttyUSB0")
-        baud = int(rospy.get_param("~baud", "115200"))
-        timeout = float(rospy.get_param("~timeout", "0.1"))
+        port = self.declare_parameter("port", "/dev/ttyUSB0").get_parameter_value().string_value
+        baud = self.declare_parameter("baud", 115200).get_parameter_value().integer_value
+        timeout = self.declare_parameter("timeout", 0.1).get_parameter_value().double_value
 
-        self.rate = rospy.get_param("~rate", 100.0)
-        self.fake = rospy.get_param("~sim", False)
+        self.rate = self.declare_parameter("rate", 100.0).get_parameter_value().double_value
+        self.fake = self.declare_parameter("sim", False).get_parameter_value().bool_value
 
-        self.use_sync_read = rospy.get_param("~sync_read",True)      # use sync read?
-        self.use_sync_write = rospy.get_param("~sync_write",True)    # use sync write?
+        self.use_sync_read = self.declare_parameter("sync_read",True).get_parameter_value().bool_value      # use sync read?
+        self.use_sync_write = self.declare_parameter("sync_write",True).get_parameter_value().bool_value    # use sync write?
 
         # setup publishers
-        self.diagnostics = DiagnosticsPublisher()
-        self.joint_state_publisher = JointStatePublisher()
+        self.diagnostics = DiagnosticsPublisher(self)
+        self.joint_state_publisher = JointStatePublisher(self)
 
         # start an arbotix driver; differ port opening to properly handle connection failures
         if not self.fake:
             ArbotiX.__init__(self, port, baud, timeout, open_port=True)
             self.connectArbotiX()
         else:
-            rospy.loginfo("ArbotiX being simulated.")
+            self.get_logger().info("ArbotiX being simulated.")
 
         # setup joints
         self.joints = dict()
-        for name in rospy.get_param("~joints", dict()).keys():
-            joint_type = rospy.get_param("~joints/"+name+"/type", "dynamixel")
+        # Unfortunately, ROS2 doesn't support YAML dictionary so we have to put the list of available joints
+        # to iterate over and set up
+        joint_names = self.declare_parameter("joint_names").get_parameter_value().string_array_value
+        for name in joint_names:
+            joint_type = self.declare_parameter("joints." + name + ".type", "dynamixel").get_parameter_value().string_value
+            self.get_logger().info("Add " + joint_type + " joint " + name)
             if joint_type == "dynamixel":
                 self.joints[name] = DynamixelServo(self, name)
             elif joint_type == "hobby_servo":
@@ -90,62 +98,70 @@ class ArbotixROS(ArbotiX):
 
         # setup controller
         self.controllers = [ServoController(self, "servos"), ]
-        controllers = rospy.get_param("~controllers", dict())
-        for name, params in controllers.items():
-            try:
-                controller = controller_types[params["type"]](self, name)
-                self.controllers.append( controller )
-                pause = pause or controller.pause
-            except Exception as e:
-                if type(e) == KeyError:
-                    rospy.logerr("Unrecognized controller: " + params["type"])
-                else:  
-                    rospy.logerr(str(type(e)) + str(e))
+        # TODO Uncomment when more controllers are supported
+        #controller_names = self.declare_parameter("controller_names").get_parameter_value().string_array_value
+        #for name in controller_names:
+        #    try:
+        #        controller_type = self.declare_parameter("controllers." + name + ".type", "unknown").get_parameter_value().string_value
+        #        self.get_logger().info("Add " + controller_type + " controller " + name)
+        #        controller = controller_types[controller_type](self, name)
+        #        self.controllers.append( controller )
+        #        pause = pause or controller.pause
+        #    except Exception as e:
+        #        self.get_logger().error(str(type(e)) + str(e))
 
+        # TODO Port I/O
         # wait for arbotix to start up (especially after reset)
-        if not self.fake:
-            if rospy.has_param("~digital_servos") or rospy.has_param("~digital_sensors") or rospy.has_param("~analog_sensors"):
-                pause = True
-            if pause:
-                while self.getDigital(1) == -1 and not rospy.is_shutdown():
-                    rospy.loginfo("ArbotiX: waiting for response...")
-                    rospy.sleep(0.25)
-            rospy.loginfo("ArbotiX connected.")
+        #if not self.fake:
+        #    if rclpy.has_param("~digital_servos") or rclpy.has_param("~digital_sensors") or rclpy.has_param("~analog_sensors"):
+        #        pause = True
+        #    if pause:
+        #        while self.getDigital(1) == -1 and not rclpy.is_shutdown():
+        #            self.get_logger().info("ArbotiX: waiting for response...")
+        #            rclpy.sleep(0.25)
+        #    self.get_logger().info("ArbotiX connected.")
 
         for controller in self.controllers:
             controller.startup()
 
+        # TODO Port I/O
         # services for io
-        rospy.Service('~SetupAnalogIn',SetupChannel, self.analogInCb)
-        rospy.Service('~SetupDigitalIn',SetupChannel, self.digitalInCb)
-        rospy.Service('~SetupDigitalOut',SetupChannel, self.digitalOutCb)
+        #self.create_subscription(SetupChannel, 'SetupAnalogIn', self.analogInCb)
+        #self.create_subscription(SetupChannel, 'SetupDigitalIn', self.digitalInCb)
+        #self.create_subscription(SetupChannel, 'SetupDigitalOut', self.digitalOutCb)
         # initialize digital/analog IO streams
-        self.io = dict()
-        if not self.fake:
-            for v,t in {"digital_servos":DigitalServo,"digital_sensors":DigitalSensor,"analog_sensors":AnalogSensor}.items():
-                temp = rospy.get_param("~"+v,dict())
-                for name in temp.keys():
-                    pin = rospy.get_param('~'+v+'/'+name+'/pin',1)
-                    value = rospy.get_param('~'+v+'/'+name+'/value',0)
-                    rate = rospy.get_param('~'+v+'/'+name+'/rate',10)
-                    leng = rospy.get_param('~'+v+'/'+name+'/length',1)  # just for analog sensors
-                    if(v != "analog_sensors"):
-                        self.io[name] = t(name, pin, value, rate, self)
-                    else:
-                        self.io[name] = t(name, pin, value, rate, leng, self)
-        
-        r = rospy.Rate(self.rate)
+        #self.io = dict()
+        #if not self.fake:
+        #    for v,t in {"digital_servos":DigitalServo,"digital_sensors":DigitalSensor,"analog_sensors":AnalogSensor}.items():
+        #        temp = rclpy.get_param("~"+v,dict())
+        #        for name in temp.keys():
+        #            pin = rclpy.get_param('~'+v+'/'+name+'/pin',1)
+        #            value = rclpy.get_param('~'+v+'/'+name+'/value',0)
+        #            rate = rclpy.get_param('~'+v+'/'+name+'/rate',10)
+        #            leng = rclpy.get_param('~'+v+'/'+name+'/length',1)  # just for analog sensors
+        #            if(v != "analog_sensors"):
+        #                self.io[name] = t(name, pin, value, rate, self)
+        #            else:
+        #                self.io[name] = t(name, pin, value, rate, leng, self)
+
+        # Spin in a separate thread
+        # See https://answers.ros.org/question/358343/rate-and-sleep-function-in-rclpy-library-for-ros2/
+        thread = threading.Thread(target=rclpy.spin, args=(self, ), daemon=True)
+        thread.start()
+
+        r = self.create_rate(self.rate)
 
         # main loop -- do all the read/write here
-        while not rospy.is_shutdown():
+        while rclpy.ok():
             try:
                 # update controllers
                 for controller in self.controllers:
                     controller.update()
     
                 # update io
-                for io in self.io.values():
-                    io.update()
+                # TODO Restore this
+                # for io in self.io.values():
+                #    io.update()
     
                 # publish feedback
                 self.joint_state_publisher.update(self.joints.values(), self.controllers)
@@ -153,7 +169,7 @@ class ArbotixROS(ArbotiX):
             except ArbotiXException as e:
                 # We assume this is a serial connection error (as is the only use of
                 # ArbotiXException by now...); try to reconnect to solve the issue 
-                rospy.logerr("ArbotiX error: %s", e)
+                self.get_logger().error("ArbotiX error: %s", e)
                 self.connectArbotiX()
 
             r.sleep()
@@ -174,12 +190,12 @@ class ArbotixROS(ArbotiX):
 
     def digitalInCb(self, req):
         if not self.fake:
-            self.io[req.topic_name] = DigitalSensor(req.topic_name, req.pin, req.value, req.rate, self) 
+            self.io[req.topic_name] = DigitalSensor(req.topic_name, req.pin, req.value, req.rate, self)
         return SetupChannelResponse()
 
     def digitalOutCb(self, req):
         if not self.fake:
-            self.io[req.topic_name] = DigitalServo(req.topic_name, req.pin, req.value, req.rate, self) 
+            self.io[req.topic_name] = DigitalServo(req.topic_name, req.pin, req.value, req.rate, self)
         return SetupChannelResponse()
 
     def connectArbotiX(self):
@@ -187,19 +203,19 @@ class ArbotixROS(ArbotiX):
         while True:
             try:
                 self.openPort()
-                rospy.loginfo("Started ArbotiX connection on port " + self._ser.port + ".")
+                self.get_logger().info("Started ArbotiX connection on port " + self._ser.port + ".")
                 return
             except ArbotiXException as e:
                 if iter%4 == 0:
-                    rospy.logerr("Unable to connect to ArbotiX: %s.", e)
-                rospy.sleep(0.5)
+                    self.get_logger().error("Unable to connect to ArbotiX: %s.", e)
+                self.create_rate(0.5).sleep()
                 iter += 1
 
 
 def main(args=None):
-    rospy.init_node('arbotix')
+    rclpy.init(args=args)
     a = ArbotixROS()
+    rclpy.shutdown()
 
 if __name__ == "__main__":
     main()
-

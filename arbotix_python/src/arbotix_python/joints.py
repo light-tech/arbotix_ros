@@ -43,7 +43,7 @@ class Joint:
 
         self.position = 0.0
         self.velocity = 0.0
-        self.last = rospy.Time.now()
+        self.last = device.get_clock().now()
 
     ## @brief Get new output, in raw data format.
     ##
@@ -76,7 +76,7 @@ class Joint:
         return None
 
 
-import rospy
+import rclpy
 import xml.dom.minidom
 
 from math import pi, radians
