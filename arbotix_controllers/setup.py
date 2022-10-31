@@ -4,7 +4,7 @@ import os
 from glob import glob
 from setuptools import setup
 
-package_name = 'arbotix_sensors'
+package_name = 'arbotix_controllers'
 
 setup(
     name=package_name,
@@ -35,14 +35,16 @@ setup(
         'Programming Language :: Python',
         'Topic :: Software Development',
     ],
-    description='Extends the arbotix_node package with a number of more sophisticated ROS wrappers for common devices.',
+    description='Extends the arbotix_python package with a number of more sophisticated ROS wrappers for common devices.',
     license='BSD',
     # Like the CMakeLists add_executable macro, you can add your python
     # scripts here.
     entry_points={
         'console_scripts': [
-            'ir_ranger = arbotix_sensors.ir_ranger:main',
-            'max_sonar = arbotix_sensors.max_sonar:main'
+            'gripper_controller = arbotix_controllers.gripper_controller:main',
+            'one_side_gripper_controller = arbotix_controllers.one_side_gripper_controller:main',
+            'parallel_gripper_controller = arbotix_controllers.parallel_gripper_controller:main',
+            'parallel_single_servo_controller = arbotix_controllers.parallel_single_servo_controller:main'
         ],
     },
 )

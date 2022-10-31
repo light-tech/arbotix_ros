@@ -203,9 +203,11 @@ class GripperActionController:
     def stateCb(self, msg):
         self.state = msg
 
-if __name__=='__main__':
+def main(args=None):
     try:
         GripperActionController()
     except rospy.ROSInterruptException:
         rospy.loginfo('Hasta la Vista...')
 
+if __name__=='__main__':
+    main()

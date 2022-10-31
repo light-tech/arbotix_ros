@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-  max_sonar.py - convert analog stream into range measurements
+  ir_ranger.py - convert analog stream into range measurements
   Copyright (c) 2011 Vanadium Labs LLC.  All right reserved.
 
   Redistribution and use in source and binary forms, with or without
@@ -35,11 +35,18 @@ from arbotix_msgs.srv import SetupChannel, SetupChannelRequest
 
 from arbotix_python.sensors import *
 
-class max_sonar:
+class ir_ranger:
     def __init__(self):
-        rospy.init_node("max_sonar")
+        rospy.init_node("ir_ranger")
         
-        self.sensor = maxSonar() 
+        # sensor type: choices are A710YK (40-216"), A02YK (8-60"), A21YK (4-30")
+        self.sensor_t = rospy.get_param("~type","GP2D12")
+        if self.sensor_t == "A710YK" or self.sensor_t == "ultralong":
+            self.sensor = gpA710YK()
+        elif self.sensor_t == "A02YK" or self.sensor_t == "long":
+            self.sensor = gpA02YK()
+        else:
+            self.sensor = gp2d12() 
 
         # start channel broadcast using SetupAnalogIn
         rospy.wait_for_service('arbotix/SetupAnalogIn')
@@ -59,7 +66,7 @@ class max_sonar:
         self.msg.max_range = self.sensor.max_range
 
         # publish/subscribe
-        self.pub = rospy.Publisher("sonar_range", Range, queue_size=5)
+        self.pub = rospy.Publisher("ir_range", Range, queue_size=5)
         rospy.Subscriber("arbotix/"+req.topic_name, Analog, self.readingCb)
 
         rospy.spin()
@@ -70,6 +77,9 @@ class max_sonar:
         self.msg.range = self.sensor.convert(msg.value<<2)
         self.pub.publish(self.msg)
 
+def main(args=None):
+    ir_ranger()
+
 if __name__=="__main__":
-    max_sonar()
+    main()
 

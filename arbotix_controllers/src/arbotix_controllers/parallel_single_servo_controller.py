@@ -125,9 +125,12 @@ class ParallelGripperController:
             return
         self.width = self.getWidth(msg.position[index])
 
-if __name__=="__main__": 
+def main(args=None):
     try:
         ParallelGripperController()
     except rospy.ROSInterruptException:
         rospy.loginfo("Hasta la Vista...")
-        
+
+if __name__=="__main__":
+    main()
+

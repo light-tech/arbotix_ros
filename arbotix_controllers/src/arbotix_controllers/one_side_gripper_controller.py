@@ -66,9 +66,11 @@ class OneSideGripperController:
         else:
             self.pub.publish(angle + self.center)
 
-if __name__=="__main__":
+def main(args=None):
     try:
         OneSideGripperController()
     except rospy.ROSInterruptException:
         rospy.loginfo("Hasta la Vista...")
-        
+
+if __name__=="__main__":
+    main()

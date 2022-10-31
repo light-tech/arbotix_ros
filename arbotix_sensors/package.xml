@@ -9,7 +9,11 @@
   <license>BSD</license>
   <url>http://ros.org/wiki/arbotix_sensors</url>
   
-  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_python</buildtool_depend>
 
-  <run_depend>arbotix_python</run_depend>
+  <exec_depend>arbotix_python</exec_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
 </package>

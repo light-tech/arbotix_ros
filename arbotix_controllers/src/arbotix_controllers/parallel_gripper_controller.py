@@ -15,7 +15,7 @@
         contributors may be used to endorse or promote products derived 
         from this software without specific prior written permission.
   
-  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 'AS IS' AND
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
   ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
   WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
   DISCLAIMED. IN NO EVENT SHALL VANADIUM LABS BE LIABLE FOR ANY DIRECT, INDIRECT,
@@ -27,53 +27,48 @@
   ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-import rospy, actionlib
+import rospy
 import thread
 
-from control_msgs.msg import GripperCommandAction
 from std_msgs.msg import Float64
 from math import asin
 
-class ParallelGripperActionController:
+class ParallelGripperController:
     """ A simple controller that operates two opposing servos to
         open/close to a particular size opening. """
     def __init__(self):
-        rospy.init_node('gripper_controller')
-        rospy.logwarn("parallel_gripper_action_controller.py is deprecated and will be removed in ROS Indigo, please use gripper_controller")
+        rospy.init_node("parallel_gripper_controller")
+        rospy.logwarn("parallel_gripper_controller.py is deprecated and will be removed in ROS Indigo, please use gripper_controller")
 
         # trapezoid model: base width connecting each gripper's rotation point
             #              + length of gripper fingers to computation point
             #              = compute angles based on a desired width at comp. point
-        self.pad_width = rospy.get_param('~pad_width', 0.01)
-        self.finger_length = rospy.get_param('~finger_length', 0.02)
-        self.min_opening = rospy.get_param('~min', 0.0)
-        self.max_opening = rospy.get_param('~max', 2*self.finger_length)
+        self.pad_width = rospy.get_param("~pad_width", 0.01)
+        self.finger_length = rospy.get_param("~finger_length", 0.02)
+        self.min_opening = rospy.get_param("~min", 0.0)
+        self.max_opening = rospy.get_param("~max", 2*self.finger_length)
 
-        self.center_l = rospy.get_param('~center_left', 0.0)
-        self.center_r = rospy.get_param('~center_right', 0.0)
-        self.invert_l = rospy.get_param('~invert_left', False)
-        self.invert_r = rospy.get_param('~invert_right', False)
+        self.center_l = rospy.get_param("~center_left", 0.0)
+        self.center_r = rospy.get_param("~center_right", 0.0)
+        self.invert_l = rospy.get_param("~invert_left", False)
+        self.invert_r = rospy.get_param("~invert_right", False)
 
         # publishers
-        self.l_pub = rospy.Publisher('l_gripper_joint/command', Float64, queue_size=5)
-        self.r_pub = rospy.Publisher('r_gripper_joint/command', Float64, queue_size=5)
+        self.l_pub = rospy.Publisher("l_gripper_joint/command", Float64, queue_size=5)
+        self.r_pub = rospy.Publisher("r_gripper_joint/command", Float64, queue_size=5)
 
         # subscribe to command and then spin
-        self.server = actionlib.SimpleActionServer('~gripper_action', GripperCommandAction, execute_cb=self.actionCb, auto_start=False)
-        self.server.start()
+        rospy.Subscriber("~command", Float64, self.commandCb)
         rospy.spin()
 
-    def actionCb(self, goal):
+    def commandCb(self, msg):
         """ Take an input command of width to open gripper. """
-        rospy.loginfo('Gripper controller action goal recieved:%f' % goal.command.position)
-        command = goal.command.position
         # check limits
-        if command > self.max_opening:
-            command = self.max_opening
-        if command < self.min_opening:
-            command = self.min_opening
+        if msg.data > self.max_opening or msg.data < self.min_opening:
+            rospy.logerr("Command exceeds limits.")
+            return
         # compute angles
-        angle = asin((command - self.pad_width)/(2*self.finger_length))
+        angle = asin((msg.data - self.pad_width)/(2*self.finger_length))
         if self.invert_l:
             l = -angle + self.center_l
         else:
@@ -87,13 +82,13 @@ class ParallelGripperActionController:
         rmsg = Float64(r)
         self.l_pub.publish(lmsg)
         self.r_pub.publish(rmsg)
-        rospy.sleep(5.0)
-        self.server.set_succeeded()
-        rospy.loginfo('Gripper Controller: Done.')
 
-if __name__=='__main__': 
+def main(args=None):
     try:
-        ParallelGripperActionController()
+        ParallelGripperController()
     except rospy.ROSInterruptException:
-        rospy.loginfo('Hasta la Vista...')
-        
+        rospy.loginfo("Hasta la Vista...")
+
+if __name__=="__main__":
+    main()
+
